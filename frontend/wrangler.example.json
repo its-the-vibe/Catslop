@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "catslop",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "routes": [
+    {
+      "pattern": "[MY_CUSTOM_DOMAIN]",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.[MY_CUSTOM_DOMAIN]",
+      "custom_domain": true
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MY_BUCKET",
+      "bucket_name": "[MY_BUCKET]"
+    }
+  ]
+}
