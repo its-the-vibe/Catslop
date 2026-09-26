@@ -1,0 +1,19 @@
+{
+  "name": "catslop-backend-cron",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "ai": {
+    "binding": "AI"
+  },
+  "r2_buckets": [
+    {
+      "binding": "MY_BUCKET",
+      "bucket_name": "<MY_BUCKET>"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "0 0 * * *"
+    ]
+  }
+}
