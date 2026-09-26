@@ -41,20 +41,29 @@ async function generateAndStoreImage(env: Env): Promise<void> {
   // 1. Generate the image using Workers AI GPU cluster
   const imageResponse = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", {
     prompt: randomPrompt,
-    num_steps: 4,
-  });
+    steps: 4,
+  }) as { image: string };
 
-  // 2. Generate a timestamped key for the object
-  const filename = `daily/generated-${Date.now()}.png`;
+  // 2. Decode the base64 string into a Uint8Array
+  const base64Data = imageResponse.image;
+  const binaryString = atob(base64Data);
+  const imageBuffer = Uint8Array.from(binaryString, (char) => char.charCodeAt(0));
 
-  // 3. Save the stream straight to R2
-  await env.MY_BUCKET.put(filename, imageResponse, {
+  // 3. Generate a timestamped key for the object
+  const isoTimestamp = new Date().toISOString();
+
+  const safeTimestamp = isoTimestamp.replace(/[:.]/g, "-");
+
+  const filename = `daily/${safeTimestamp}_cat.png`;
+  
+  // 4. Save the stream straight to R2
+  await env.MY_BUCKET.put(filename, imageBuffer, {
     httpMetadata: {
       contentType: "image/png",
     },
     customMetadata: {
       prompt: randomPrompt,
-      generatedAt: new Date().toISOString()
+      generatedAt: isoTimestamp
     }
   });
 
