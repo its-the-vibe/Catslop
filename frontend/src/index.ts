@@ -25,7 +25,7 @@ export default {
     const imageTags = objects.objects
       .map(
         (obj) =>
-          `<img src="/${obj.key}" style="width: 300px; height: 200px; object-fit: cover; margin: 10px; border-radius: 8px;" />`
+          `<img src="/${obj.key}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`
       )
       .join("");
 
