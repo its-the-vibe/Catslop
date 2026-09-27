@@ -1,5 +1,6 @@
 export interface Env {
   MY_BUCKET: R2Bucket;
+  DB: D1Database;
 }
 
 export default {
@@ -20,12 +21,22 @@ export default {
       return new Response(object.body, { headers });
     }
 
-    // Otherwise, list all objects in the bucket and render the visual grid
-    const objects = await env.MY_BUCKET.list();
-    const imageTags = objects.objects
+    // Otherwise, list all images from the database and render the visual grid
+    let rows: Array<{ r2_key: string }> = [];
+    try {
+      const result = await env.DB.prepare(
+        "SELECT r2_key FROM cat_pics WHERE hidden = FALSE ORDER BY created_at DESC"
+      ).all<{ r2_key: string }>();
+      rows = result.results;
+    } catch (error) {
+      console.error("Failed to query cat_pics", error);
+      return new Response("Unable to load images right now.", { status: 500 });
+    }
+
+    const imageTags = rows
       .map(
-        (obj) =>
-          `<img src="/${obj.key}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`
+        (row) =>
+          `<img src="/${encodeURI(row.r2_key)}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`
       )
       .join("");
 
