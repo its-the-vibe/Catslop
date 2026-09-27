@@ -58,7 +58,7 @@ async function generateAndStoreImage(env: Env): Promise<void> {
 
   const filename = `daily/${safeTimestamp}_cat.png`;
   
-  // 4. Save the stream straight to R2
+  // 4. Save to R2, then persist metadata in D1
   await env.MY_BUCKET.put(filename, imageBuffer, {
     httpMetadata: {
       contentType: "image/png",
@@ -77,6 +77,11 @@ async function generateAndStoreImage(env: Env): Promise<void> {
       .run();
   } catch (error) {
     console.error("Failed to write cat_pics record", error);
+    try {
+      await env.MY_BUCKET.delete(filename);
+    } catch (deleteError) {
+      console.error("Failed to clean up orphaned R2 object", deleteError);
+    }
     throw error;
   }
 

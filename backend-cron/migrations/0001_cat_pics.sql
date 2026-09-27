@@ -10,3 +10,4 @@ CREATE TABLE IF NOT EXISTS cat_pics (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cat_pics_created_at ON cat_pics(created_at);
+CREATE INDEX IF NOT EXISTS idx_cat_pics_hidden_created_at ON cat_pics(hidden, created_at DESC);
