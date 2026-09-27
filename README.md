@@ -47,11 +47,11 @@ Catslop is a Cloudflare Workers app that automatically generates AI cat pictures
    or run with `npx wrangler` in commands below.
 
 3. Configure the frontend Worker:
-   - Copy `/frontend/wrangler.example.json` to `/frontend/wrangler.jsonc` (or your preferred Wrangler config file name).
+   - Copy `/frontend/wrangler.example.json` to `/frontend/wrangler.json`.
    - Fill in your custom domain, R2 bucket, and D1 database values.
 
 4. Configure the backend cron Worker:
-   - Copy `/backend-cron/wrangler.example.json` to `/backend-cron/wrangler.jsonc` (or your preferred Wrangler config file name).
+   - Copy `/backend-cron/wrangler.example.json` to `/backend-cron/wrangler.json`.
    - Fill in your R2 bucket and D1 database values.
 
 5. Create/apply D1 migrations for the backend project:

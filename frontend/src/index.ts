@@ -68,6 +68,7 @@ export default {
             .thumb-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
             .thumb-image { width: min(300px, calc(100vw - 60px)); height: min(300px, calc(100vw - 60px)); object-fit: cover; border-radius: 8px; display: block; }
             #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
+            #image-modal[hidden] { display: none; }
             #image-modal[aria-hidden="false"] { display: flex; }
             #modal-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
             #close-modal { position: absolute; top: 12px; right: 16px; font-size: 30px; line-height: 1; color: white; background: none; border: none; cursor: pointer; }
@@ -76,7 +77,7 @@ export default {
         <body>
           <h1>Catslop</h1>
           <div class="gallery">${imageTags}</div>
-          <div id="image-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Enlarged cat image viewer">
+          <div id="image-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Enlarged cat image viewer">
             <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
             <img id="modal-image" alt="Enlarged cat picture" />
           </div>
@@ -92,12 +93,14 @@ export default {
               function openImageModal(imageSrc, triggerElement) {
                 lastTrigger = triggerElement;
                 modalImage.src = imageSrc;
+                modal.hidden = false;
                 modal.setAttribute("aria-hidden", "false");
                 closeModalButton.focus();
               }
 
               function closeImageModal() {
                 modal.setAttribute("aria-hidden", "true");
+                modal.hidden = true;
                 modalImage.removeAttribute("src");
                 if (lastTrigger) {
                   lastTrigger.focus();
