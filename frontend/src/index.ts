@@ -3,6 +3,15 @@ export interface Env {
   DB: D1Database;
 }
 
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -25,7 +34,7 @@ export default {
     let rows: Array<{ r2_key: string }> = [];
     try {
       const result = await env.DB.prepare(
-        "SELECT r2_key FROM cat_pics WHERE hidden = FALSE ORDER BY created_at DESC"
+        "SELECT r2_key FROM cat_pics WHERE hidden = FALSE ORDER BY created_at DESC, id DESC"
       ).all<{ r2_key: string }>();
       rows = result.results;
     } catch (error) {
@@ -35,8 +44,10 @@ export default {
 
     const imageTags = rows
       .map(
-        (row) =>
-          `<img src="/${encodeURI(row.r2_key)}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`
+        (row) => {
+          const imagePath = escapeHtmlAttribute(`/${encodeURI(row.r2_key)}`);
+          return `<img src="${imagePath}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`;
+        }
       )
       .join("");
 
