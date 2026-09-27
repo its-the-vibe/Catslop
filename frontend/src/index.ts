@@ -50,7 +50,7 @@ export default {
       .map(
         (row) => {
           const imagePath = escapeHtmlAttribute(toObjectPath(row.r2_key));
-          return `<img src="${imagePath}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`;
+          return `<button type="button" class="thumb-button" data-image-src="${imagePath}" aria-label="Enlarge cat image"><img src="${imagePath}" class="thumb-image" alt="Cat picture" loading="lazy" /></button>`;
         }
       )
       .join("");
@@ -61,10 +61,62 @@ export default {
         <head>
           <title>Catslop</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px; }
+            .gallery { display: flex; flex-wrap: wrap; gap: 20px; }
+            .thumb-button { padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 8px; }
+            .thumb-image { width: min(300px, calc(100vw - 60px)); height: min(300px, calc(100vw - 60px)); object-fit: cover; border-radius: 8px; display: block; }
+            #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
+            #image-modal[aria-hidden="false"] { display: flex; }
+            #modal-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+            #close-modal { position: absolute; top: 12px; right: 16px; font-size: 30px; line-height: 1; color: white; background: none; border: none; cursor: pointer; }
+          </style>
         </head>
-        <body style="font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px;">
+        <body>
           <h1>Catslop</h1>
-          <div style="display: flex; flex-wrap: wrap;">${imageTags}</div>
+          <div class="gallery">${imageTags}</div>
+          <div id="image-modal" aria-hidden="true">
+            <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
+            <img id="modal-image" alt="Enlarged cat picture" />
+          </div>
+          <script>
+            const modal = document.getElementById("image-modal");
+            const modalImage = document.getElementById("modal-image");
+            const closeModalButton = document.getElementById("close-modal");
+            const gallery = document.querySelector(".gallery");
+
+            function openImageModal(imageSrc) {
+              modalImage.src = imageSrc;
+              modal.setAttribute("aria-hidden", "false");
+            }
+
+            function closeImageModal() {
+              modal.setAttribute("aria-hidden", "true");
+              modalImage.removeAttribute("src");
+            }
+
+            if (modal && modalImage && closeModalButton && gallery) {
+              gallery.addEventListener("click", (event) => {
+                if (!(event.target instanceof Element)) return;
+                const trigger = event.target.closest(".thumb-button");
+                if (!trigger) return;
+                const imageSrc = trigger.getAttribute("data-image-src");
+                if (!imageSrc) return;
+                openImageModal(imageSrc);
+              });
+
+              closeModalButton.addEventListener("click", closeImageModal);
+              modal.addEventListener("click", (event) => {
+                if (event.target === modal) closeImageModal();
+              });
+
+              document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape" && modal.getAttribute("aria-hidden") === "false") {
+                  closeImageModal();
+                }
+              });
+            }
+          </script>
         </body>
       </html>
     `;
