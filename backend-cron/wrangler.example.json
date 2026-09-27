@@ -15,5 +15,12 @@
     "crons": [
       "0 0 * * *"
     ]
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "<database_name>",
+      "database_id": "<database_id>"
+    }
+  ]
 }
