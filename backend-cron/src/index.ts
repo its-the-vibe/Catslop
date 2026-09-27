@@ -1,6 +1,7 @@
 export interface Env {
   AI: Ai;
   MY_BUCKET: R2Bucket;
+  DB: D1Database;
 }
 
 export default {
@@ -20,6 +21,7 @@ export default {
 };
 
 async function generateAndStoreImage(env: Env): Promise<void> {
+  const model = "@cf/black-forest-labs/flux-1-schnell";
   const prompts = [
     "An elegant cat composed of swirling golden vines, stained glass patterns, and floral Alphonse Mucha motifs, soft jewel tones, intricate linework.",
     "A cozy cat sitting by a sunlit window, impasto oil painting with visible brushstrokes, vibrant sunlight filters, Monet style.",
@@ -39,7 +41,7 @@ async function generateAndStoreImage(env: Env): Promise<void> {
   console.log(`Generating image for prompt: "${randomPrompt}"`);
 
   // 1. Generate the image using Workers AI GPU cluster
-  const imageResponse = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", {
+  const imageResponse = await env.AI.run(model, {
     prompt: randomPrompt,
     steps: 4,
   }) as { image: string };
@@ -56,7 +58,7 @@ async function generateAndStoreImage(env: Env): Promise<void> {
 
   const filename = `daily/${safeTimestamp}_cat.png`;
   
-  // 4. Save the stream straight to R2
+  // 4. Save to R2, then persist metadata in D1
   await env.MY_BUCKET.put(filename, imageBuffer, {
     httpMetadata: {
       contentType: "image/png",
@@ -66,6 +68,22 @@ async function generateAndStoreImage(env: Env): Promise<void> {
       generatedAt: isoTimestamp
     }
   });
+
+  try {
+    await env.DB.prepare(
+      "INSERT INTO cat_pics (r2_key, model, prompt, hidden) VALUES (?, ?, ?, ?)"
+    )
+      .bind(filename, model, randomPrompt, false)
+      .run();
+  } catch (error) {
+    console.error("Failed to write cat_pics record", error);
+    try {
+      await env.MY_BUCKET.delete(filename);
+    } catch (deleteError) {
+      console.error("Failed to clean up orphaned R2 object", deleteError);
+    }
+    throw error;
+  }
 
   console.log(`Successfully stored image as ${filename} in R2!`);
 }

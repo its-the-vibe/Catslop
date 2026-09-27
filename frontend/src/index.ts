@@ -1,5 +1,19 @@
 export interface Env {
   MY_BUCKET: R2Bucket;
+  DB: D1Database;
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function toObjectPath(r2Key: string): string {
+  return `/${r2Key.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
 }
 
 export default {
@@ -20,12 +34,24 @@ export default {
       return new Response(object.body, { headers });
     }
 
-    // Otherwise, list all objects in the bucket and render the visual grid
-    const objects = await env.MY_BUCKET.list();
-    const imageTags = objects.objects
+    // Otherwise, list all images from the database and render the visual grid
+    let rows: Array<{ r2_key: string }> = [];
+    try {
+      const result = await env.DB.prepare(
+        "SELECT r2_key FROM cat_pics WHERE hidden = FALSE ORDER BY created_at DESC, id DESC"
+      ).all<{ r2_key: string }>();
+      rows = result.results;
+    } catch (error) {
+      console.error("Failed to query cat_pics", error);
+      return new Response("Unable to load images right now.", { status: 500 });
+    }
+
+    const imageTags = rows
       .map(
-        (obj) =>
-          `<img src="/${obj.key}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`
+        (row) => {
+          const imagePath = escapeHtmlAttribute(toObjectPath(row.r2_key));
+          return `<img src="${imagePath}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`;
+        }
       )
       .join("");
 
