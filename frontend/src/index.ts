@@ -50,7 +50,7 @@ export default {
       .map(
         (row) => {
           const imagePath = escapeHtmlAttribute(toObjectPath(row.r2_key));
-          return `<img src="${imagePath}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`;
+          return `<button type="button" class="thumb-button" data-image-src="${imagePath}" aria-label="Enlarge cat image"><img src="${imagePath}" class="thumb-image" alt="Cat picture" loading="lazy" /></button>`;
         }
       )
       .join("");
@@ -61,10 +61,104 @@ export default {
         <head>
           <title>Catslop</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px; }
+            .gallery { display: flex; flex-wrap: wrap; gap: 20px; }
+            .thumb-button { padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 8px; }
+            .thumb-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+            .thumb-image { width: min(300px, calc(100vw - 60px)); height: min(300px, calc(100vw - 60px)); object-fit: cover; border-radius: 8px; display: block; }
+            #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
+            #image-modal[hidden] { display: none; }
+            #image-modal[aria-hidden="false"] { display: flex; }
+            #modal-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+            #close-modal { position: absolute; top: 12px; right: 16px; font-size: 30px; line-height: 1; color: white; background: none; border: none; cursor: pointer; }
+            .visually-hidden {
+              position: absolute;
+              width: 1px;
+              height: 1px;
+              padding: 0;
+              margin: -1px;
+              overflow: hidden;
+              clip: rect(0, 0, 0, 0);
+              white-space: nowrap;
+              border: 0;
+            }
+          </style>
         </head>
-        <body style="font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px;">
+        <body>
           <h1>Catslop</h1>
-          <div style="display: flex; flex-wrap: wrap;">${imageTags}</div>
+          <div class="gallery">${imageTags}</div>
+          <div id="image-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="image-modal-title">
+            <h2 id="image-modal-title" class="visually-hidden">Enlarged cat image viewer</h2>
+            <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
+            <img id="modal-image" alt="Enlarged cat picture" tabindex="0" />
+          </div>
+          <script>
+            const modal = document.getElementById("image-modal");
+            const modalImage = document.getElementById("modal-image");
+            const closeModalButton = document.getElementById("close-modal");
+            const gallery = document.querySelector(".gallery");
+
+            if (modal && modalImage && closeModalButton && gallery) {
+              let lastTrigger = null;
+
+              function openImageModal(imageSrc, triggerElement) {
+                lastTrigger = triggerElement;
+                modalImage.src = imageSrc;
+                modal.hidden = false;
+                modal.setAttribute("aria-hidden", "false");
+                closeModalButton.focus();
+              }
+
+              function closeImageModal() {
+                modal.setAttribute("aria-hidden", "true");
+                modal.hidden = true;
+                modalImage.removeAttribute("src");
+                if (lastTrigger) {
+                  lastTrigger.focus();
+                  lastTrigger = null;
+                }
+              }
+
+              gallery.addEventListener("click", (event) => {
+                if (!(event.target instanceof Element)) return;
+                const trigger = event.target.closest(".thumb-button");
+                if (!trigger) return;
+                const imageSrc = trigger.getAttribute("data-image-src");
+                if (!imageSrc) return;
+                openImageModal(imageSrc, trigger);
+              });
+
+              closeModalButton.addEventListener("click", closeImageModal);
+              modal.addEventListener("click", (event) => {
+                if (event.target === modal) closeImageModal();
+              });
+
+              document.addEventListener("keydown", (event) => {
+                if (modal.getAttribute("aria-hidden") !== "false") return;
+                if (event.key === "Tab") {
+                  const focusableElements = modal.querySelectorAll(
+                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                  );
+                  if (!focusableElements.length) return;
+                  const firstElement = focusableElements[0];
+                  const lastElement = focusableElements[focusableElements.length - 1];
+                  const activeElement = document.activeElement;
+
+                  if (event.shiftKey && activeElement === firstElement) {
+                    event.preventDefault();
+                    lastElement.focus();
+                  } else if (!event.shiftKey && activeElement === lastElement) {
+                    event.preventDefault();
+                    firstElement.focus();
+                  }
+                }
+                if (event.key === "Escape") {
+                  closeImageModal();
+                }
+              });
+            }
+          </script>
         </body>
       </html>
     `;
