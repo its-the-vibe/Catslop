@@ -65,6 +65,7 @@ export default {
             body { font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px; }
             .gallery { display: flex; flex-wrap: wrap; gap: 20px; }
             .thumb-button { padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 8px; }
+            .thumb-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
             .thumb-image { width: min(300px, calc(100vw - 60px)); height: min(300px, calc(100vw - 60px)); object-fit: cover; border-radius: 8px; display: block; }
             #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
             #image-modal[aria-hidden="false"] { display: flex; }
@@ -75,7 +76,7 @@ export default {
         <body>
           <h1>Catslop</h1>
           <div class="gallery">${imageTags}</div>
-          <div id="image-modal" aria-hidden="true">
+          <div id="image-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Enlarged cat image viewer">
             <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
             <img id="modal-image" alt="Enlarged cat picture" />
           </div>
@@ -85,17 +86,17 @@ export default {
             const closeModalButton = document.getElementById("close-modal");
             const gallery = document.querySelector(".gallery");
 
-            function openImageModal(imageSrc) {
-              modalImage.src = imageSrc;
-              modal.setAttribute("aria-hidden", "false");
-            }
-
-            function closeImageModal() {
-              modal.setAttribute("aria-hidden", "true");
-              modalImage.removeAttribute("src");
-            }
-
             if (modal && modalImage && closeModalButton && gallery) {
+              function openImageModal(imageSrc) {
+                modalImage.src = imageSrc;
+                modal.setAttribute("aria-hidden", "false");
+              }
+
+              function closeImageModal() {
+                modal.setAttribute("aria-hidden", "true");
+                modalImage.removeAttribute("src");
+              }
+
               gallery.addEventListener("click", (event) => {
                 if (!(event.target instanceof Element)) return;
                 const trigger = event.target.closest(".thumb-button");
