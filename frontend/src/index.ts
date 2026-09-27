@@ -87,14 +87,22 @@ export default {
             const gallery = document.querySelector(".gallery");
 
             if (modal && modalImage && closeModalButton && gallery) {
-              function openImageModal(imageSrc) {
+              let lastTrigger = null;
+
+              function openImageModal(imageSrc, triggerElement) {
+                lastTrigger = triggerElement;
                 modalImage.src = imageSrc;
                 modal.setAttribute("aria-hidden", "false");
+                closeModalButton.focus();
               }
 
               function closeImageModal() {
                 modal.setAttribute("aria-hidden", "true");
                 modalImage.removeAttribute("src");
+                if (lastTrigger) {
+                  lastTrigger.focus();
+                  lastTrigger = null;
+                }
               }
 
               gallery.addEventListener("click", (event) => {
@@ -103,7 +111,7 @@ export default {
                 if (!trigger) return;
                 const imageSrc = trigger.getAttribute("data-image-src");
                 if (!imageSrc) return;
-                openImageModal(imageSrc);
+                openImageModal(imageSrc, trigger);
               });
 
               closeModalButton.addEventListener("click", closeImageModal);
