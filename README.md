@@ -60,7 +60,7 @@ Catslop is a Cloudflare Workers app that automatically generates AI cat pictures
 
    ```bash
    cd backend-cron
-   wrangler d1 migrations apply <database_name>
+   npx wrangler d1 migrations apply <database_name>
    cd ..
    ```
 
@@ -72,14 +72,14 @@ Frontend:
 
 ```bash
 cd frontend
-wrangler dev
+npx wrangler dev
 ```
 
 Backend cron worker (manual HTTP trigger while testing):
 
 ```bash
 cd backend-cron
-wrangler dev
+npx wrangler dev
 ```
 
 Then call the backend worker URL once to generate an image manually.
@@ -90,14 +90,14 @@ Deploy frontend:
 
 ```bash
 cd frontend
-wrangler deploy
+npx wrangler deploy
 ```
 
 Deploy backend cron worker:
 
 ```bash
 cd backend-cron
-wrangler deploy
+npx wrangler deploy
 ```
 
 ## Contributing

@@ -72,15 +72,26 @@ export default {
             #image-modal[aria-hidden="false"] { display: flex; }
             #modal-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
             #close-modal { position: absolute; top: 12px; right: 16px; font-size: 30px; line-height: 1; color: white; background: none; border: none; cursor: pointer; }
+            .visually-hidden {
+              position: absolute;
+              width: 1px;
+              height: 1px;
+              padding: 0;
+              margin: -1px;
+              overflow: hidden;
+              clip: rect(0, 0, 0, 0);
+              white-space: nowrap;
+              border: 0;
+            }
           </style>
         </head>
         <body>
           <h1>Catslop</h1>
           <div class="gallery">${imageTags}</div>
           <div id="image-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="image-modal-title">
-            <h2 id="image-modal-title" style="position: absolute; left: -9999px;">Enlarged cat image viewer</h2>
+            <h2 id="image-modal-title" class="visually-hidden">Enlarged cat image viewer</h2>
             <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
-            <img id="modal-image" alt="Enlarged cat picture" />
+            <img id="modal-image" alt="Enlarged cat picture" tabindex="0" />
           </div>
           <script>
             const modal = document.getElementById("image-modal");
@@ -126,8 +137,21 @@ export default {
               document.addEventListener("keydown", (event) => {
                 if (modal.getAttribute("aria-hidden") !== "false") return;
                 if (event.key === "Tab") {
-                  event.preventDefault();
-                  closeModalButton.focus();
+                  const focusableElements = modal.querySelectorAll(
+                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                  );
+                  if (!focusableElements.length) return;
+                  const firstElement = focusableElements[0];
+                  const lastElement = focusableElements[focusableElements.length - 1];
+                  const activeElement = document.activeElement;
+
+                  if (event.shiftKey && activeElement === firstElement) {
+                    event.preventDefault();
+                    lastElement.focus();
+                  } else if (!event.shiftKey && activeElement === lastElement) {
+                    event.preventDefault();
+                    firstElement.focus();
+                  }
                 }
                 if (event.key === "Escape") {
                   closeImageModal();
