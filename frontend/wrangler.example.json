@@ -18,5 +18,12 @@
       "binding": "MY_BUCKET",
       "bucket_name": "<MY_BUCKET>"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "<database_name>",
+      "database_id": "<database_id>"
+    }
   ]
 }
