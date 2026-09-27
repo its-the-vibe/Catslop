@@ -77,7 +77,8 @@ export default {
         <body>
           <h1>Catslop</h1>
           <div class="gallery">${imageTags}</div>
-          <div id="image-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Enlarged cat image viewer">
+          <div id="image-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="image-modal-title">
+            <h2 id="image-modal-title" style="position: absolute; left: -9999px;">Enlarged cat image viewer</h2>
             <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
             <img id="modal-image" alt="Enlarged cat picture" />
           </div>
@@ -123,7 +124,12 @@ export default {
               });
 
               document.addEventListener("keydown", (event) => {
-                if (event.key === "Escape" && modal.getAttribute("aria-hidden") === "false") {
+                if (modal.getAttribute("aria-hidden") !== "false") return;
+                if (event.key === "Tab") {
+                  event.preventDefault();
+                  closeModalButton.focus();
+                }
+                if (event.key === "Escape") {
                   closeImageModal();
                 }
               });
