@@ -12,6 +12,10 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+function toObjectPath(r2Key: string): string {
+  return `/${r2Key.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -45,7 +49,7 @@ export default {
     const imageTags = rows
       .map(
         (row) => {
-          const imagePath = escapeHtmlAttribute(`/${encodeURI(row.r2_key)}`);
+          const imagePath = escapeHtmlAttribute(toObjectPath(row.r2_key));
           return `<img src="${imagePath}" style="width: 300px; height: 300px; object-fit: cover; margin: 10px; border-radius: 8px;" />`;
         }
       )
