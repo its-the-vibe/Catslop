@@ -3,7 +3,7 @@ export interface Env {
   DB: D1Database;
 }
 
-function escapeHtmlAttribute(value: string): string {
+function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
@@ -34,25 +34,54 @@ export default {
       return new Response(object.body, { headers });
     }
 
-    // Otherwise, list all images from the database and render the visual grid
-    let rows: Array<{ r2_key: string }> = [];
+    // Otherwise, list all images and reactions from the database and render the visual grid
+    let rows: Array<{ id: number; r2_key: string }> = [];
+    const reactionsByCatPic = new Map<number, Array<{ emoji: string; count: number }>>();
+
     try {
-      const result = await env.DB.prepare(
-        "SELECT r2_key FROM cat_pics WHERE hidden = FALSE ORDER BY created_at DESC, id DESC"
-      ).all<{ r2_key: string }>();
-      rows = result.results;
+      const [catPicsResult, reactionsResult] = await Promise.all([
+        env.DB.prepare(
+          "SELECT id, r2_key FROM cat_pics WHERE hidden = FALSE ORDER BY created_at DESC, id DESC"
+        ).all<{ id: number; r2_key: string }>(),
+        env.DB.prepare(
+          "SELECT cat_pic_id, emoji, COUNT(*) as count FROM reactions GROUP BY cat_pic_id, emoji"
+        ).all<{ cat_pic_id: number; emoji: string; count: number }>()
+      ]);
+
+      rows = catPicsResult.results;
+
+      for (const reaction of reactionsResult.results) {
+        const list = reactionsByCatPic.get(reaction.cat_pic_id) || [];
+        list.push({ emoji: reaction.emoji, count: reaction.count });
+        reactionsByCatPic.set(reaction.cat_pic_id, list);
+      }
     } catch (error) {
-      console.error("Failed to query cat_pics", error);
+      console.error("Failed to query cat_pics or reactions", error);
       return new Response("Unable to load images right now.", { status: 500 });
     }
 
-    const imageTags = rows
-      .map(
-        (row) => {
-          const imagePath = escapeHtmlAttribute(toObjectPath(row.r2_key));
-          return `<button type="button" class="thumb-button" data-image-src="${imagePath}" aria-label="Enlarge cat image"><img src="${imagePath}" class="thumb-image" alt="Cat picture" loading="lazy" /></button>`;
-        }
-      )
+    const imageCards = rows
+      .map((row) => {
+        const imagePath = escapeHtml(toObjectPath(row.r2_key));
+        const reactions = reactionsByCatPic.get(row.id) || [];
+        const reactionsHtml = reactions.length > 0
+          ? `<div class="reactions-container" data-cat-pic-id="${row.id}">${reactions
+              .map(
+                (r) =>
+                  `<span class="reaction-badge" aria-label="${r.count} ${escapeHtml(r.emoji)} reactions"><span class="emoji">
+                    ${r.emoji}
+                  </span><span class="count">${r.count}</span></span>`
+              )
+              .join("")}</div>`
+          : "";
+
+        return `<div class="gallery-card" data-cat-pic-id="${row.id}">
+            <button type="button" class="thumb-button" data-image-src="${imagePath}" aria-label="Enlarge cat image">
+              <img src="${imagePath}" class="thumb-image" alt="Cat picture" loading="lazy" />
+            </button>
+            ${reactionsHtml}
+          </div>`;
+      })
       .join("");
 
     const html = `
@@ -64,9 +93,13 @@ export default {
           <style>
             body { font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px; }
             .gallery { display: flex; flex-wrap: wrap; gap: 20px; }
-            .thumb-button { padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 8px; }
+            .gallery-card { display: flex; flex-direction: column; width: min(300px, calc(100vw - 60px)); }
+            .thumb-button { padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 8px; width: 100%; }
             .thumb-button:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
-            .thumb-image { width: min(300px, calc(100vw - 60px)); height: min(300px, calc(100vw - 60px)); object-fit: cover; border-radius: 8px; display: block; }
+            .thumb-image { width: 100%; height: min(300px, calc(100vw - 60px)); object-fit: cover; border-radius: 8px; display: block; }
+            .reactions-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+            .reaction-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2px 8px; font-size: 0.85rem; border: 1px solid rgba(255, 255, 255, 0.15); }
+            .reaction-badge .count { font-weight: 500; color: #e0e0e0; }
             #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
             #image-modal[hidden] { display: none; }
             #image-modal[aria-hidden="false"] { display: flex; }
@@ -87,7 +120,7 @@ export default {
         </head>
         <body>
           <h1>Catslop</h1>
-          <div class="gallery">${imageTags}</div>
+          <div class="gallery">${imageCards}</div>
           <div id="image-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="image-modal-title">
             <h2 id="image-modal-title" class="visually-hidden">Enlarged cat image viewer</h2>
             <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
@@ -163,6 +196,6 @@ export default {
       </html>
     `;
 
-    return new Response(html, { headers: { "content-type": "text/html" } });
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
   },
 };
