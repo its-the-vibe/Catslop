@@ -68,9 +68,9 @@ export default {
           ? `<div class="reactions-container" data-cat-pic-id="${row.id}">${reactions
               .map(
                 (r) =>
-                  `<span class="reaction-badge" aria-label="${r.count} ${escapeHtml(r.emoji)} reactions"><span class="emoji">${escapeHtml(
-                    r.emoji
-                  )}</span><span class="count">${r.count}</span></span>`
+                  `<span class="reaction-badge" aria-label="${r.count} ${escapeHtml(r.emoji)} reactions"><span class="emoji">
+                    ${r.emoji}
+                  </span><span class="count">${r.count}</span></span>`
               )
               .join("")}</div>`
           : "";
@@ -196,6 +196,6 @@ export default {
       </html>
     `;
 
-    return new Response(html, { headers: { "content-type": "text/html" } });
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
   },
 };
