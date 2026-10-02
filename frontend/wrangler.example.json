@@ -5,11 +5,15 @@
   "compatibility_date": "2026-01-01",
   "routes": [
     {
-      "pattern": "<MY_CUSTOM_DOMAIN>",
+      "pattern": "catslop.uk",
       "custom_domain": true
     },
     {
-      "pattern": "www.<MY_CUSTOM_DOMAIN>",
+      "pattern": "www.catslop.uk",
+      "custom_domain": true
+    },
+    {
+      "pattern": "catslop.its-the-vibe.uk",
       "custom_domain": true
     }
   ],

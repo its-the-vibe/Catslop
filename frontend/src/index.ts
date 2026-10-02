@@ -1,6 +1,84 @@
 export interface Env {
   MY_BUCKET: R2Bucket;
   DB: D1Database;
+  POLICY_AUD?: string;
+}
+
+interface JWTPayload {
+  sub?: string;
+  aud?: string | string[];
+  exp?: number;
+  [key: string]: unknown;
+}
+
+function parseCookies(cookieHeader: string | null): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+  for (const pair of cookieHeader.split(";")) {
+    const [key, ...valueParts] = pair.trim().split("=");
+    if (key) {
+      cookies[key] = valueParts.join("=");
+    }
+  }
+  return cookies;
+}
+
+function decodeJwtBase64Url(str: string): string {
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4 !== 0) {
+    base64 += "=";
+  }
+  return atob(base64);
+}
+
+export function verifyUserToken(request: Request, env: Env): { valid: boolean; userId?: string } {
+  const cookieHeader = request.headers.get("Cookie");
+  const cookies = parseCookies(cookieHeader);
+  const token = cookies["CF_Authorization"];
+
+  if (!token) {
+    return { valid: false };
+  }
+
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return { valid: false };
+    }
+
+    const payloadJson = decodeJwtBase64Url(parts[1]);
+    const payload = JSON.parse(payloadJson) as JWTPayload;
+
+    // Check expiration
+    if (typeof payload.exp === "number") {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (payload.exp < nowSeconds) {
+        return { valid: false };
+      }
+    }
+
+    // Check audience if POLICY_AUD is configured
+    if (env.POLICY_AUD) {
+      if (!payload.aud) {
+        return { valid: false };
+      }
+      if (Array.isArray(payload.aud)) {
+        if (!payload.aud.includes(env.POLICY_AUD)) {
+          return { valid: false };
+        }
+      } else if (payload.aud !== env.POLICY_AUD) {
+        return { valid: false };
+      }
+    }
+
+    if (!payload.sub) {
+      return { valid: false };
+    }
+
+    return { valid: true, userId: payload.sub };
+  } catch (err) {
+    return { valid: false };
+  }
 }
 
 function escapeHtml(value: string): string {
@@ -20,6 +98,46 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // Handle reaction submission POST /api/react
+    if (url.pathname === "/api/react" && request.method === "POST") {
+      const authResult = verifyUserToken(request, env);
+      if (!authResult.valid || !authResult.userId) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const body = (await request.json()) as { cat_pic_id?: number; emoji?: string };
+        const { cat_pic_id, emoji } = body;
+
+        if (!cat_pic_id || typeof cat_pic_id !== "number" || !emoji || typeof emoji !== "string") {
+          return new Response(JSON.stringify({ error: "Invalid request body" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        await env.DB.prepare(
+          "INSERT INTO reactions (cat_pic_id, user_id, emoji) VALUES (?, ?, ?) ON CONFLICT(cat_pic_id, user_id, emoji) DO NOTHING"
+        )
+          .bind(cat_pic_id, authResult.userId, emoji)
+          .run();
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        console.error("Failed to insert reaction", err);
+        return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Serve a single image when requested (e.g., /vacation.jpg)
     if (url.pathname !== "/") {
       const objectKey = url.pathname.slice(1);
@@ -33,6 +151,9 @@ export default {
 
       return new Response(object.body, { headers });
     }
+
+    // Check user auth state for GET /
+    const userAuth = verifyUserToken(request, env);
 
     // Otherwise, list all images and reactions from the database and render the visual grid
     let rows: Array<{ id: number; r2_key: string }> = [];
@@ -76,13 +197,26 @@ export default {
           : "";
 
         return `<div class="gallery-card" data-cat-pic-id="${row.id}">
-            <button type="button" class="thumb-button" data-image-src="${imagePath}" aria-label="Enlarge cat image">
+            <button type="button" class="thumb-button" data-cat-pic-id="${row.id}" data-image-src="${imagePath}" aria-label="Enlarge cat image">
               <img src="${imagePath}" class="thumb-image" alt="Cat picture" loading="lazy" />
             </button>
             ${reactionsHtml}
           </div>`;
       })
       .join("");
+
+    const reactionSubmissionUiHtml = userAuth.valid
+      ? `<div id="modal-reactions" class="modal-reactions">
+          <span class="modal-reactions-label">React:</span>
+          <div class="emoji-picker">
+            <button type="button" class="emoji-btn" data-emoji="❤️" aria-label="React with ❤️">❤️</button>
+            <button type="button" class="emoji-btn" data-emoji="🔥" aria-label="React with 🔥">🔥</button>
+            <button type="button" class="emoji-btn" data-emoji="😻" aria-label="React with 😻">😻</button>
+            <button type="button" class="emoji-btn" data-emoji="😂" aria-label="React with 😂">😂</button>
+            <button type="button" class="emoji-btn" data-emoji="👍" aria-label="React with 👍">👍</button>
+          </div>
+        </div>`
+      : "";
 
     const html = `
       <!DOCTYPE html>
@@ -100,11 +234,17 @@ export default {
             .reactions-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
             .reaction-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2px 8px; font-size: 0.85rem; border: 1px solid rgba(255, 255, 255, 0.15); }
             .reaction-badge .count { font-weight: 500; color: #e0e0e0; }
-            #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
+            #image-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 24px; z-index: 1000; gap: 16px; }
             #image-modal[hidden] { display: none; }
             #image-modal[aria-hidden="false"] { display: flex; }
-            #modal-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+            #modal-image { max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; border-radius: 10px; }
             #close-modal { position: absolute; top: 12px; right: 16px; font-size: 30px; line-height: 1; color: white; background: none; border: none; cursor: pointer; }
+            .modal-reactions { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.1); padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); }
+            .modal-reactions-label { font-size: 0.9rem; font-weight: 600; color: #ccc; }
+            .emoji-picker { display: flex; gap: 8px; }
+            .emoji-btn { background: transparent; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; width: 36px; height: 36px; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.1s, background 0.1s; color: white; }
+            .emoji-btn:hover { transform: scale(1.15); background: rgba(255, 255, 255, 0.2); }
+            .emoji-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
             .visually-hidden {
               position: absolute;
               width: 1px;
@@ -125,18 +265,22 @@ export default {
             <h2 id="image-modal-title" class="visually-hidden">Enlarged cat image viewer</h2>
             <button id="close-modal" type="button" aria-label="Close image viewer">&times;</button>
             <img id="modal-image" alt="Enlarged cat picture" tabindex="0" />
+            ${reactionSubmissionUiHtml}
           </div>
           <script>
             const modal = document.getElementById("image-modal");
             const modalImage = document.getElementById("modal-image");
             const closeModalButton = document.getElementById("close-modal");
             const gallery = document.querySelector(".gallery");
+            const modalReactions = document.getElementById("modal-reactions");
 
             if (modal && modalImage && closeModalButton && gallery) {
               let lastTrigger = null;
+              let currentCatPicId = null;
 
-              function openImageModal(imageSrc, triggerElement) {
+              function openImageModal(imageSrc, catPicId, triggerElement) {
                 lastTrigger = triggerElement;
+                currentCatPicId = catPicId;
                 modalImage.src = imageSrc;
                 modal.hidden = false;
                 modal.setAttribute("aria-hidden", "false");
@@ -147,6 +291,7 @@ export default {
                 modal.setAttribute("aria-hidden", "true");
                 modal.hidden = true;
                 modalImage.removeAttribute("src");
+                currentCatPicId = null;
                 if (lastTrigger) {
                   lastTrigger.focus();
                   lastTrigger = null;
@@ -158,14 +303,43 @@ export default {
                 const trigger = event.target.closest(".thumb-button");
                 if (!trigger) return;
                 const imageSrc = trigger.getAttribute("data-image-src");
+                const catPicId = trigger.getAttribute("data-cat-pic-id");
                 if (!imageSrc) return;
-                openImageModal(imageSrc, trigger);
+                openImageModal(imageSrc, catPicId, trigger);
               });
 
               closeModalButton.addEventListener("click", closeImageModal);
               modal.addEventListener("click", (event) => {
                 if (event.target === modal) closeImageModal();
               });
+
+              if (modalReactions) {
+                modalReactions.addEventListener("click", async (event) => {
+                  if (!(event.target instanceof Element)) return;
+                  const btn = event.target.closest(".emoji-btn");
+                  if (!btn || !currentCatPicId) return;
+                  const emoji = btn.getAttribute("data-emoji");
+                  if (!emoji) return;
+
+                  try {
+                    btn.disabled = true;
+                    const res = await fetch("/api/react", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ cat_pic_id: Number(currentCatPicId), emoji })
+                    });
+                    if (res.ok) {
+                      window.location.reload();
+                    } else {
+                      console.error("Failed to submit reaction", await res.text());
+                    }
+                  } catch (err) {
+                    console.error("Error submitting reaction", err);
+                  } finally {
+                    btn.disabled = false;
+                  }
+                });
+              }
 
               document.addEventListener("keydown", (event) => {
                 if (modal.getAttribute("aria-hidden") !== "false") return;
