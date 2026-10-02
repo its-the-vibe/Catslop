@@ -170,4 +170,8 @@ test("GET / renders modal-reactions UI for authenticated requests", async () => 
   const html = await res.text();
   assert.strictEqual(html.includes('id="modal-reactions"'), true);
   assert.strictEqual(html.includes('class="emoji-picker"'), true);
+  assert.strictEqual(html.includes('id="shortcut-emojis"'), true);
+  assert.strictEqual(html.includes('id="toggle-emoji-picker"'), true);
+  assert.strictEqual(html.includes('<emoji-picker'), true);
+  assert.strictEqual(html.includes('emoji-picker-element'), true);
 });
