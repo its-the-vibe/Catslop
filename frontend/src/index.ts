@@ -206,14 +206,20 @@ export default {
       .join("");
 
     const reactionSubmissionUiHtml = userAuth.valid
-      ? `<div id="modal-reactions" class="modal-reactions">
-          <span class="modal-reactions-label">React:</span>
-          <div class="emoji-picker">
-            <button type="button" class="emoji-btn" data-emoji="❤️" aria-label="React with ❤️">❤️</button>
-            <button type="button" class="emoji-btn" data-emoji="🔥" aria-label="React with 🔥">🔥</button>
-            <button type="button" class="emoji-btn" data-emoji="😻" aria-label="React with 😻">😻</button>
-            <button type="button" class="emoji-btn" data-emoji="😂" aria-label="React with 😂">😂</button>
-            <button type="button" class="emoji-btn" data-emoji="👍" aria-label="React with 👍">👍</button>
+      ? `<div id="modal-reactions-wrapper" class="modal-reactions-wrapper">
+          <div id="emoji-picker-popover" class="emoji-picker-popover" hidden>
+            <emoji-picker class="dark"></emoji-picker>
+          </div>
+          <div id="modal-reactions" class="modal-reactions">
+            <span class="modal-reactions-label">React:</span>
+            <div class="emoji-picker" id="shortcut-emojis">
+              <button type="button" class="emoji-btn" data-emoji="❤️" aria-label="React with ❤️">❤️</button>
+              <button type="button" class="emoji-btn" data-emoji="🔥" aria-label="React with 🔥">🔥</button>
+              <button type="button" class="emoji-btn" data-emoji="😻" aria-label="React with 😻">😻</button>
+              <button type="button" class="emoji-btn" data-emoji="😂" aria-label="React with 😂">😂</button>
+              <button type="button" class="emoji-btn" data-emoji="👍" aria-label="React with 👍">👍</button>
+            </div>
+            <button type="button" class="emoji-btn emoji-picker-toggle" id="toggle-emoji-picker" aria-label="More emojis" aria-expanded="false" title="More emojis">➕</button>
           </div>
         </div>`
       : "";
@@ -224,6 +230,7 @@ export default {
         <head>
           <title>Catslop</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
           <style>
             body { font-family: system-ui, sans-serif; background: #121212; color: white; padding: 20px; }
             .gallery { display: flex; flex-wrap: wrap; gap: 20px; }
@@ -239,12 +246,16 @@ export default {
             #image-modal[aria-hidden="false"] { display: flex; }
             #modal-image { max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; border-radius: 10px; }
             #close-modal { position: absolute; top: 12px; right: 16px; font-size: 30px; line-height: 1; color: white; background: none; border: none; cursor: pointer; }
+            .modal-reactions-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; }
             .modal-reactions { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.1); padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.2); }
             .modal-reactions-label { font-size: 0.9rem; font-weight: 600; color: #ccc; }
-            .emoji-picker { display: flex; gap: 8px; }
+            .emoji-picker { display: flex; gap: 8px; align-items: center; }
             .emoji-btn { background: transparent; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; width: 36px; height: 36px; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.1s, background 0.1s; color: white; }
             .emoji-btn:hover { transform: scale(1.15); background: rgba(255, 255, 255, 0.2); }
             .emoji-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+            .emoji-picker-popover { position: absolute; bottom: 100%; margin-bottom: 8px; z-index: 1010; max-width: 100%; display: flex; justify-content: center; }
+            .emoji-picker-popover[hidden] { display: none; }
+            emoji-picker { width: min(320px, calc(100vw - 32px)); height: 300px; }
             .visually-hidden {
               position: absolute;
               width: 1px;
@@ -272,7 +283,55 @@ export default {
             const modalImage = document.getElementById("modal-image");
             const closeModalButton = document.getElementById("close-modal");
             const gallery = document.querySelector(".gallery");
-            const modalReactions = document.getElementById("modal-reactions");
+
+            const DEFAULT_REACTION_EMOJIS = ["❤️", "🔥", "😻", "😂", "👍"];
+            const RECENT_EMOJIS_KEY = "catslop_recent_emojis";
+
+            function escapeHtmlJs(str) {
+              return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            }
+
+            function getRecentEmojis() {
+              try {
+                const stored = localStorage.getItem(RECENT_EMOJIS_KEY);
+                if (stored) {
+                  const parsed = JSON.parse(stored);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    const filtered = parsed.filter(e => typeof e === "string" && e.trim()).slice(0, 5);
+                    if (filtered.length > 0) return filtered;
+                  }
+                }
+              } catch (e) {
+                console.error("Failed to read recent emojis from localStorage", e);
+              }
+              return DEFAULT_REACTION_EMOJIS.slice();
+            }
+
+            function saveRecentEmoji(emoji) {
+              try {
+                let current = getRecentEmojis();
+                current = current.filter(e => e !== emoji);
+                current.unshift(emoji);
+                current = current.slice(0, 5);
+                localStorage.setItem(RECENT_EMOJIS_KEY, JSON.stringify(current));
+                return current;
+              } catch (e) {
+                console.error("Failed to save recent emoji to localStorage", e);
+                return getRecentEmojis();
+              }
+            }
+
+            function updateShortcutButtonsUI() {
+              const container = document.getElementById("shortcut-emojis");
+              if (!container) return;
+              const emojis = getRecentEmojis();
+              container.innerHTML = emojis
+                .map(
+                  (emoji) =>
+                    \`<button type="button" class="emoji-btn" data-emoji="\${escapeHtmlJs(emoji)}" aria-label="React with \${escapeHtmlJs(emoji)}">\${escapeHtmlJs(emoji)}</button>\`
+                )
+                .join("");
+            }
 
             if (modal && modalImage && closeModalButton && gallery) {
               let lastTrigger = null;
@@ -282,6 +341,7 @@ export default {
                 lastTrigger = triggerElement;
                 currentCatPicId = catPicId;
                 modalImage.src = imageSrc;
+                updateShortcutButtonsUI();
                 modal.hidden = false;
                 modal.setAttribute("aria-hidden", "false");
                 closeModalButton.focus();
@@ -292,9 +352,52 @@ export default {
                 modal.hidden = true;
                 modalImage.removeAttribute("src");
                 currentCatPicId = null;
+                hideEmojiPicker();
                 if (lastTrigger) {
                   lastTrigger.focus();
                   lastTrigger = null;
+                }
+              }
+
+              function hideEmojiPicker() {
+                const popover = document.getElementById("emoji-picker-popover");
+                const toggleBtn = document.getElementById("toggle-emoji-picker");
+                if (popover) popover.hidden = true;
+                if (toggleBtn) toggleBtn.setAttribute("aria-expanded", "false");
+              }
+
+              function toggleEmojiPicker() {
+                const popover = document.getElementById("emoji-picker-popover");
+                const toggleBtn = document.getElementById("toggle-emoji-picker");
+                if (!popover || !toggleBtn) return;
+                const isHidden = popover.hidden;
+                popover.hidden = !isHidden;
+                toggleBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
+              }
+
+              async function sendReaction(emoji) {
+                if (!currentCatPicId || !emoji) return;
+                saveRecentEmoji(emoji);
+                updateShortcutButtonsUI();
+                try {
+                  const allButtons = modal.querySelectorAll(".emoji-btn, #toggle-emoji-picker");
+                  allButtons.forEach(btn => btn.disabled = true);
+
+                  const res = await fetch("/api/react", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cat_pic_id: Number(currentCatPicId), emoji })
+                  });
+                  if (res.ok) {
+                    window.location.reload();
+                  } else {
+                    console.error("Failed to submit reaction", await res.text());
+                  }
+                } catch (err) {
+                  console.error("Error submitting reaction", err);
+                } finally {
+                  const allButtons = modal.querySelectorAll(".emoji-btn, #toggle-emoji-picker");
+                  allButtons.forEach(btn => btn.disabled = false);
                 }
               }
 
@@ -313,31 +416,30 @@ export default {
                 if (event.target === modal) closeImageModal();
               });
 
-              if (modalReactions) {
-                modalReactions.addEventListener("click", async (event) => {
+              const toggleBtn = document.getElementById("toggle-emoji-picker");
+              if (toggleBtn) {
+                toggleBtn.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  toggleEmojiPicker();
+                });
+              }
+
+              const shortcutContainer = document.getElementById("shortcut-emojis");
+              if (shortcutContainer) {
+                shortcutContainer.addEventListener("click", (event) => {
                   if (!(event.target instanceof Element)) return;
                   const btn = event.target.closest(".emoji-btn");
-                  if (!btn || !currentCatPicId) return;
+                  if (!btn) return;
                   const emoji = btn.getAttribute("data-emoji");
-                  if (!emoji) return;
+                  if (emoji) sendReaction(emoji);
+                });
+              }
 
-                  try {
-                    btn.disabled = true;
-                    const res = await fetch("/api/react", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ cat_pic_id: Number(currentCatPicId), emoji })
-                    });
-                    if (res.ok) {
-                      window.location.reload();
-                    } else {
-                      console.error("Failed to submit reaction", await res.text());
-                    }
-                  } catch (err) {
-                    console.error("Error submitting reaction", err);
-                  } finally {
-                    btn.disabled = false;
-                  }
+              const emojiPicker = document.querySelector("emoji-picker");
+              if (emojiPicker) {
+                emojiPicker.addEventListener("emoji-click", (event) => {
+                  const emoji = event.detail.unicode || (event.detail.emoji && event.detail.emoji.unicode);
+                  if (emoji) sendReaction(emoji);
                 });
               }
 
@@ -345,7 +447,7 @@ export default {
                 if (modal.getAttribute("aria-hidden") !== "false") return;
                 if (event.key === "Tab") {
                   const focusableElements = modal.querySelectorAll(
-                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
                   );
                   if (!focusableElements.length) return;
                   const firstElement = focusableElements[0];
